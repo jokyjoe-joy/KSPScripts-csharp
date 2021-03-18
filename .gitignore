@@ -15,3 +15,4 @@ obj/
 
 # NOTE: Including .vscode/, as it contains useful tasks for easier development with VSCode
 #.vscode/
+.vs/
