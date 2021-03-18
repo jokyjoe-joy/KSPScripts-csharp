@@ -18,9 +18,18 @@ class Serpent
     public static Stream<double> verticalSpeedStream;
     public static Event landingFailsafeEvent;
     public static Tuple<double, double, double> PROGRADE = Tuple.Create (0.0, 1.0, 0.0);
-    public static Tuple<double, double, double> RETROGRADE = Tuple.Create (0.0, -1.0, 0.0);
-    public static void Start()
+    public static Tuple<double, double, double> Retrograde = Tuple.Create (0.0, -1.0, 0.0);
+    public static Double OrbitApoapsisAlt;
+    public static Double OrbitPeriapsisAlt;
+
+    /// <summary>
+    /// 
+    /// </summary>
+    public static void Start(double orbitApoapsisAlt = 72000, double orbitPeriapsisAlt = 72000)
     {
+        OrbitApoapsisAlt = orbitApoapsisAlt;
+        OrbitPeriapsisAlt = orbitPeriapsisAlt;
+
         // Decided that having a proper error msg when can't connect would be better.
         try 
         {
@@ -54,13 +63,12 @@ class Serpent
         Expression expr = Expression.LessThan(conn,Expression.Call(conn, verticalSpeedCall), Expression.ConstantDouble(conn, 0));
         landingFailsafeEvent = conn.KRPC().AddEvent(expr);
         landingFailsafeEvent.AddCallback(LandingStageLoop);
-        landingFailsafeEvent.Start();
 
         // Start sequence
         Countdown(5);
         LaunchStageLoop();
         SuborbitalStageLoop();
-        LandingStageLoop();
+        DeorbitalStageLoop();
     }
 
     public static void Countdown(int x)
@@ -71,7 +79,6 @@ class Serpent
             System.Threading.Thread.Sleep(1000);
         }
     }
-
     /// <summary>
     /// Has 3 ActivateNextStage() calls.
     /// </summary>
@@ -79,19 +86,24 @@ class Serpent
     {
         // Setting up auto-pilot.
         vessel.AutoPilot.TargetPitchAndHeading(90, 90);
+        // TODO: Does SAS does something here?
+        vessel.AutoPilot.SAS = true;
+        vessel.AutoPilot.SASMode = SASMode.StabilityAssist;
         vessel.AutoPilot.Engage();
         vessel.Control.Throttle = 1;
 
         // Launch!
         Console.WriteLine("Launch");
         vessel.Control.ActivateNextStage();
-        
      
         // Execute gravity turn when reaching 10000 meters.
         // TODO: What if vessel runs out of fuel before reaching 10000 meters?
         while (meanAltitudeStream.Get() <= 10000)
             continue;
-        
+
+        // Starting landingFailsafe here, as we already have vertical speed.
+        landingFailsafeEvent.Start();
+
         Console.WriteLine("Gravity turn");
         vessel.AutoPilot.TargetPitchAndHeading(60, 90);
 
@@ -99,44 +111,82 @@ class Serpent
         while (solidFuelStream.Get() > 0.1f)
             continue;
 
+        vessel.Control.Throttle = 0;
         vessel.Control.ActivateNextStage();
+        // Wait a little with no throttle, so that the craft's boosters don't collide and explode.
+        System.Threading.Thread.Sleep(2000);
+        vessel.Control.Throttle = 1;
 
         // Wait until out of liquid fuel...
+        // TODO: It doesn't work, it gets decoupled anyway. Maybe use vessel.Control.CurrentStage - 1?
         while (vessel.ResourcesInDecoupleStage(vessel.Control.CurrentStage).Amount("LiquidFuel") > 0.1f)
             continue;
 
         vessel.Control.ActivateNextStage();
         Console.WriteLine("Ending launch stage...");
     }
-
-    /// <summary>
-    /// Has 1 ActivateNextStage() call.
-    /// Has 1 CollectExperiemntResults() call.
-    /// </summary>
     public static void SuborbitalStageLoop()
     {
         Console.WriteLine("Entering suborbital stage");
-        // Waiting until having an apoapsis of 72000 meters.
-        while (apoapsisAltitudeStream.Get() < 72000)
+        // Waiting until having an apoapsis of specified meters.
+        while (apoapsisAltitudeStream.Get() < OrbitApoapsisAlt)
             continue;
         vessel.Control.Throttle = 0;
         
         vessel.AutoPilot.ReferenceFrame = vessel.OrbitalReferenceFrame;
 
         // Waiting until approaching apoapsis, then throttle in prograde
-        while (meanAltitudeStream.Get() < apoapsisAltitudeStream.Get() - 2000)
+        while (meanAltitudeStream.Get() < apoapsisAltitudeStream.Get() - 4000)
             vessel.AutoPilot.TargetDirection = PROGRADE;
 
-        vessel.Control.Throttle = 1;
-
-        while (periapsisAltitudeStream.Get() < 72000)
-            continue;
-
+        // Waiting until reaching specified periapsis altitude.
+        while (periapsisAltitudeStream.Get() < OrbitPeriapsisAlt)
+        {
+            // Only throttle when within 3 mins of apoapsis.
+            if (vessel.Orbit.TimeToApoapsis < 180)
+                vessel.Control.Throttle = 1;
+            else if (vessel.Orbit.TimeToApoapsis > 700) // Keep throttling in case we are over apoapsis and not in orbit.
+                vessel.Control.Throttle = 1;
+            else 
+            {
+                vessel.Control.Throttle = 0;
+                spaceCenter.WarpTo(spaceCenter.UT + vessel.Orbit.TimeToApoapsis - 20); // warp closer to apoapsis
+            }
+        }
         vessel.Control.Throttle = 0;
 
+        // Remove landingFailsafe as we are in orbit
+        landingFailsafeEvent.Remove();
         Console.WriteLine("Exiting suborbital stage");
+    }
+    /// <summary>
+    /// Has 1 ActivateNextStage() call.
+    /// Has 1 LandingStageLoop() call.
+    /// </summary>
+    public static void DeorbitalStageLoop()
+    {
+        Console.WriteLine("Entering deorbital stage");
+
+        vessel.AutoPilot.Engage();
+        // TODO: Check if apoapsis or periapsis is bigger, and burn retrograde accordingly
+        vessel.AutoPilot.ReferenceFrame = vessel.OrbitalReferenceFrame;
+
+        // Waiting until approaching apoapsis, then throttle in retrograde
+        while (vessel.Orbit.TimeToApoapsis > 20)
+            vessel.AutoPilot.TargetDirection = Retrograde;
+
+        // Burn in retrograde until reaching an altitude low enough to land
+        vessel.Control.Throttle = 1;
+        while (vessel.Orbit.PeriapsisAltitude > 35000)
+            vessel.AutoPilot.TargetDirection = Retrograde;
+
+        vessel.Control.Throttle = 0;
+        // Wait a few secs, because the throttle doesn't go away instantly if activating next stage :/
+        System.Threading.Thread.Sleep(3000); 
+
         vessel.Control.ActivateNextStage();
-        CollectExperimentResults();
+        Console.WriteLine("Exiting deorbital stage");
+        LandingStageLoop();
     }
     public static void LandingStageLoop()
     {
@@ -146,7 +196,7 @@ class Serpent
         bool hasParachuteInStage = false;
         foreach (var part in vessel.Parts.InStage(vessel.Control.CurrentStage))
         {
-            if (part.Parachute != null)
+            if (part.Parachute != null) // TODO: Doesn't work
             {
                 hasParachuteInStage = true;
                 break;
@@ -155,10 +205,10 @@ class Serpent
         if (!hasParachuteInStage) vessel.Control.ActivateNextStage();
 
         vessel.AutoPilot.Engage();
-        vessel.AutoPilot.ReferenceFrame = vessel.SurfaceVelocityReferenceFrame;
+        vessel.AutoPilot.ReferenceFrame = vessel.SurfaceReferenceFrame;
         // Targeting retrograde while entering atmosphere (for the heatshields).
         while (surfaceAltitudeStream.Get() > 2000)
-            vessel.AutoPilot.TargetDirection = RETROGRADE;
+            vessel.AutoPilot.TargetDirection = vessel.Flight(null).Retrograde;
 
         
         Console.WriteLine("Deploying parachutes.");
