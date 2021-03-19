@@ -5,6 +5,9 @@ using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
+using System.IO;
+using System.Text;
 
 namespace KSPScripts
 {
@@ -18,8 +21,29 @@ namespace KSPScripts
 		private void Application_Startup(object sender, StartupEventArgs e)
 		{
 			MainWindow wnd = new MainWindow();
-			wnd.Title = "KSP Controller";
 			wnd.Show();
 		}
+        public class GUIConsoleWriter : TextWriter
+        {
+            public ListBox consoleBox;
+            public GUIConsoleWriter(ListBox consoleBox)
+            {
+                this.consoleBox = consoleBox;
+            }
+            public override void WriteLine(string value)
+            {
+                string time = DateTime.Now.ToString("HH:mm:ss");
+                // Add a dot to the end of the line if it doesn't end on one of the specified symbols.
+                var isEndCharASymbol = value.Last().ToString().IndexOfAny("!.?:".ToCharArray()) != -1;
+                if (!isEndCharASymbol) value += ".";
+
+                consoleBox.Items.Add($"{time}: {value}");
+            }
+
+            public override Encoding Encoding
+            {
+                get { return Encoding.ASCII; }
+            }
+        }
     }
 }

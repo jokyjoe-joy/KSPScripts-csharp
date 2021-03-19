@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using KRPC.Client;
 using KRPC.Client.Services.KRPC;
 using KRPC.Client.Services.SpaceCenter;
@@ -26,14 +25,20 @@ class Serpent
     /// <summary>
     /// 
     /// </summary>
-    public static void Start(double orbitApoapsisAlt = 72000, double orbitPeriapsisAlt = 72000, bool consoleToGUI = true)
+    public static void Start(double orbitApoapsisAlt = 72000, double orbitPeriapsisAlt = 72000, bool consoleToGUI = true, dynamic consoleBoxGUI = null)
     {
         OrbitApoapsisAlt = orbitApoapsisAlt;
         OrbitPeriapsisAlt = orbitPeriapsisAlt;
 
-        // Redirect Console.WriteLine
-        if (consoleToGUI) Console.SetOut(new KSPScripts.MainWindow.GUIConsoleWriter());
-
+        // Redirect Console.WriteLine to GUI.
+        if (consoleToGUI && consoleBoxGUI != null) Console.SetOut(new KSPScripts.App.GUIConsoleWriter(consoleBoxGUI));
+        
+        // Check if given options are appropriate.
+        if (OrbitApoapsisAlt < 70000 || OrbitPeriapsisAlt < 70000)
+        {
+            Console.WriteLine("Given orbit altitudes are incorrect, as they are below 70000 meters.");
+            return;
+        }
 
         // Decided that having a proper error msg when can't connect would be better.
         try 

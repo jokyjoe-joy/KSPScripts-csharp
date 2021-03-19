@@ -6,11 +6,21 @@
         xmlns:sys="clr-namespace:System;assembly=mscorlib"
         xmlns:local="clr-namespace:KSPScripts"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
-    
+        Title="Rocket Controller" Height="450" Width="800">
+    <Window.Resources>
+        <sys:String x:Key="strSerpentTooltip">Serpent is designed to launch a rocket from Kerbin to Low Kerbin Orbit. It uses 4 next-stage calls.</sys:String>
+    </Window.Resources>
+
     <DockPanel Margin="10" Name="pnlMain">
-        <WrapPanel DockPanel.Dock="Top" HorizontalAlignment="Center" Margin="10">
-            <Button Name="startSerpentButton" Click="StartSerpent">Start Serpent</Button>
+        <WrapPanel DockPanel.Dock="Top" HorizontalAlignment="Center" Margin="10">           
+            <WrapPanel.Resources>
+                <Style TargetType="{x:Type Button}">
+                    <Setter Property="Margin" Value="10,0" />
+                    <Setter Property="Padding" Value="10,10" />
+                </Style>
+            </WrapPanel.Resources>
+
+            <Button Name="SerpentWindow" Click="StartScript" ToolTip="{StaticResource strSerpentTooltip}">Start Serpent</Button>
         </WrapPanel>
 
         <ListBox Name="lbResult" />

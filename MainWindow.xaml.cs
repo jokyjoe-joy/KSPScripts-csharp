@@ -12,7 +12,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
-using System.IO;
+using System.Reflection;
 
 namespace KSPScripts
 {
@@ -25,26 +25,29 @@ namespace KSPScripts
         public MainWindow()
         {
             InitializeComponent();
-            consoleBox = lbResult;
-            Console.SetOut(new GUIConsoleWriter());
+            Console.SetOut(new App.GUIConsoleWriter(lbResult));
+            Console.WriteLine("Initialized Rocket Controller.");
         }
-        private void StartSerpent(object sender, RoutedEventArgs e)
+        private void StartScript(object sender, RoutedEventArgs e)
         {
-            Console.WriteLine("=== RUNNING SERPENT ===");
-            Serpent.Start(orbitApoapsisAlt: 80000, orbitPeriapsisAlt: 80000, consoleToGUI: true);
-            Console.WriteLine("=== EXITING SERPENT ===");
-        }
-        public class GUIConsoleWriter : TextWriter
-        {
-            public override void WriteLine(string value)
-            {
-                consoleBox.Items.Add(value);
-            }
+            // Button name is the window's name, e.g.: SerpentWindow.
+            string buttonName = (sender as Button).Name.ToString();
 
-            public override Encoding Encoding
-            {
-                get { return Encoding.ASCII; }
-            }
+            // Only log out the name of the script with first char capitalized.
+            string controllerName = buttonName.Replace("Window","").First().ToString().ToUpper() + buttonName.Replace("Window","").Substring(1);
+            Console.WriteLine($"Starting {controllerName} controller.");
+
+            // Get type from KSPScripts namespace.
+            Type t = Type.GetType("KSPScripts." + buttonName); 
+            dynamic window = Activator.CreateInstance(t);
+
+            this.Hide();
+            window.ShowDialog();
+            this.Show();
+
+            // Change back console to this window's console
+            Console.SetOut(new App.GUIConsoleWriter(lbResult));
+            Console.WriteLine($"Exiting {controllerName} controller.");
         }
     }
 }
