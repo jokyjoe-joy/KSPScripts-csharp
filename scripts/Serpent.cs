@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using KRPC.Client;
 using KRPC.Client.Services.KRPC;
 using KRPC.Client.Services.SpaceCenter;
@@ -25,10 +26,14 @@ class Serpent
     /// <summary>
     /// 
     /// </summary>
-    public static void Start(double orbitApoapsisAlt = 72000, double orbitPeriapsisAlt = 72000)
+    public static void Start(double orbitApoapsisAlt = 72000, double orbitPeriapsisAlt = 72000, bool consoleToGUI = true)
     {
         OrbitApoapsisAlt = orbitApoapsisAlt;
         OrbitPeriapsisAlt = orbitPeriapsisAlt;
+
+        // Redirect Console.WriteLine
+        if (consoleToGUI) Console.SetOut(new KSPScripts.MainWindow.GUIConsoleWriter());
+
 
         // Decided that having a proper error msg when can't connect would be better.
         try 
