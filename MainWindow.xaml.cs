@@ -34,7 +34,8 @@ namespace KSPScripts
             string buttonName = (sender as Button).Name.ToString();
 
             // Only log out the name of the script with first char capitalized.
-            string controllerName = buttonName.Replace("Window","").First().ToString().ToUpper() + buttonName.Replace("Window","").Substring(1);
+            string controllerName = buttonName.Replace("Window","").FirstCharToUpper();
+            
             Console.WriteLine($"Starting {controllerName} controller.");
 
             // Get type from KSPScripts namespace.

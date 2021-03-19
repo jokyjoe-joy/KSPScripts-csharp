@@ -15,7 +15,7 @@ namespace KSPScripts
     {
 		private void Application_DispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
 		{
-			MessageBox.Show("An unhandled exception just occurred: " + e.Exception.Message, "Exception Sample", MessageBoxButton.OK, MessageBoxImage.Error);
+			MessageBox.Show($"An unhandled exception just occurred: {e.Exception.Message} @ {e.Exception.Source} ", "Exception Sample", MessageBoxButton.OK, MessageBoxImage.Error);
 			e.Handled = true;
 		}
 		private void Application_Startup(object sender, StartupEventArgs e)
@@ -23,6 +23,11 @@ namespace KSPScripts
 			MainWindow wnd = new MainWindow();
 			wnd.Show();
 		}
+        private void Application_Exit(object sender, ExitEventArgs e)
+        {
+            // Shutting down all running threads as well.
+            Environment.Exit(Environment.ExitCode);
+        }
         public class GUIConsoleWriter : TextWriter
         {
             public ListBox consoleBox;
@@ -45,5 +50,15 @@ namespace KSPScripts
                 get { return Encoding.ASCII; }
             }
         }
+    }
+    public static class StringExtensions
+    {
+        public static string FirstCharToUpper(this string input) =>
+            input switch
+            {
+                null => throw new ArgumentNullException(nameof(input)),
+                "" => throw new ArgumentException($"{nameof(input)} cannot be empty", nameof(input)),
+                _ => input.First().ToString().ToUpper() + input.Substring(1)
+            };
     }
 }

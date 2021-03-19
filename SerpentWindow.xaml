@@ -8,8 +8,10 @@
         mc:Ignorable="d"
         Title="Serpent" Height="450" Width="800">
     <Window.Resources>
-        <sys:String x:Key="strLaunchTooltip">Initiate the launch sequence</sys:String>
-        <sys:String x:Key="strCollectExperimentsTooltip">Loops through each part that can collect science, and deploys or runs them</sys:String>
+        <sys:String x:Key="strLaunchTooltip">Initiates the launch sequence.</sys:String>
+        <sys:String x:Key="strCollectExperimentsTooltip">Loops through each part that can collect science, and deploys or runs them.</sys:String>
+        <sys:String x:Key="strStopScriptTooltip">Stops script if running.</sys:String>
+        <sys:String x:Key="strDeorbitTooltip">Initiates the deorbit sequence.</sys:String>
     </Window.Resources>
 
     <DockPanel Margin="10" Name="pnlMain">
@@ -23,6 +25,8 @@
 
             <Button Name="launch" Click="Launch" ToolTip="{StaticResource strLaunchTooltip}">Launch</Button>
             <Button Name="collectExperiments" Click="CollectExperiments" ToolTip="{StaticResource strCollectExperimentsTooltip}">Collect Experiments</Button>
+            <Button Name="stopScript" Click="StopScript" ToolTip="{StaticResource strStopScriptTooltip}">Stop</Button>
+            <Button Name="deorbit" Click="Deorbit" ToolTip="{StaticResource strDeorbitTooltip}">Deorbit</Button>
         </WrapPanel>
 
         <WrapPanel DockPanel.Dock="Top" HorizontalAlignment="Center" Margin="10">
