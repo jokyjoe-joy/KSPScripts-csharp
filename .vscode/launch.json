@@ -8,10 +8,9 @@
             "name": "Launch (console)",
             "type": "coreclr",
             "request": "launch",
-            "preLaunchTask": "build",
+            "preLaunchTask": "run",
             "cwd": "${workspaceFolder}",
             "console": "internalConsole",
-            "program": "${workspaceFolder}/bin/Debug/net5.0/KSPScripts-csharp.exe"
         },
     ]
 }

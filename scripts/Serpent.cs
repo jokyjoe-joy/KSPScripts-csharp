@@ -2,6 +2,7 @@ using System;
 using KRPC.Client;
 using KRPC.Client.Services.KRPC;
 using KRPC.Client.Services.SpaceCenter;
+using KSPScripts;
 class Serpent
 {
     public static Connection conn;
@@ -21,26 +22,39 @@ class Serpent
     public static Tuple<double, double, double> Retrograde = Tuple.Create (0.0, -1.0, 0.0);
     public static Double OrbitApoapsisAlt;
     public static Double OrbitPeriapsisAlt;
+    public static IProgress<string> progress;
 
+    // TODO: Rewrite whole script to not use while loops.
+    // TODO: Rewrite whole script to use adaptive throttling.
     /// <summary>
     /// 
     /// </summary>
-    public static void Start(double orbitApoapsisAlt = 72000, double orbitPeriapsisAlt = 72000)
+    public static void Start(double orbitApoapsisAlt = 72000, double orbitPeriapsisAlt = 72000, bool consoleToGUI = true, dynamic consoleBoxGUI = null, IProgress<string> _progress = null)
     {
         OrbitApoapsisAlt = orbitApoapsisAlt;
         OrbitPeriapsisAlt = orbitPeriapsisAlt;
+        progress = _progress;
 
+
+        // Redirect Console.WriteLine to GUI.
+        if (consoleToGUI && consoleBoxGUI != null) Console.SetOut(new KSPScripts.App.GUIConsoleWriter(consoleBoxGUI));
+        // Check if given options are appropriate.
+        if (OrbitApoapsisAlt < 70000 || OrbitPeriapsisAlt < 70000)
+        {
+            progress.Report("Given orbit altitudes are incorrect, as they are below 70000 meters.");
+            return;
+        }
         // Decided that having a proper error msg when can't connect would be better.
         try 
         {
-            conn = new Connection();
+            conn = new Connection(name: "Serpent");
         }
         catch
         {
-            Console.WriteLine("Couldn't connect to the kRPC server. Exiting...");
+            progress.Report("Couldn't connect to the kRPC server. Exiting...");
             return;
         }
-        
+
         // Getting variables and streams
         spaceCenter = conn.SpaceCenter();
         vessel = spaceCenter.ActiveVessel;
@@ -68,14 +82,14 @@ class Serpent
         Countdown(5);
         LaunchStageLoop();
         SuborbitalStageLoop();
-        DeorbitalStageLoop();
+        progress.Report("Launch stage concluded.");
     }
 
     public static void Countdown(int x)
     {
         for (int i = x; i > 0; i--)
         {
-            Console.WriteLine(i);
+            progress.Report(i.ToString());
             System.Threading.Thread.Sleep(1000);
         }
     }
@@ -93,23 +107,23 @@ class Serpent
         vessel.Control.Throttle = 1;
 
         // Launch!
-        Console.WriteLine("Launch");
+        progress.Report("Launch");
         vessel.Control.ActivateNextStage();
      
         // Execute gravity turn when reaching 10000 meters.
         // TODO: What if vessel runs out of fuel before reaching 10000 meters?
         while (meanAltitudeStream.Get() <= 10000)
-            continue;
+            System.Threading.Thread.Sleep(1000);
 
         // Starting landingFailsafe here, as we already have vertical speed.
         landingFailsafeEvent.Start();
 
-        Console.WriteLine("Gravity turn");
+        progress.Report("Gravity turn");
         vessel.AutoPilot.TargetPitchAndHeading(60, 90);
 
         // Wait until out of solid fuel...
         while (solidFuelStream.Get() > 0.1f)
-            continue;
+            System.Threading.Thread.Sleep(1000);
 
         vessel.Control.Throttle = 0;
         vessel.Control.ActivateNextStage();
@@ -120,14 +134,14 @@ class Serpent
         // Wait until out of liquid fuel...
         // TODO: It doesn't work, it gets decoupled anyway. Maybe use vessel.Control.CurrentStage - 1?
         while (vessel.ResourcesInDecoupleStage(vessel.Control.CurrentStage).Amount("LiquidFuel") > 0.1f)
-            continue;
+            System.Threading.Thread.Sleep(1000);
 
         vessel.Control.ActivateNextStage();
-        Console.WriteLine("Ending launch stage...");
+        progress.Report("Ending launch stage...");
     }
     public static void SuborbitalStageLoop()
     {
-        Console.WriteLine("Entering suborbital stage");
+        progress.Report("Entering suborbital stage");
         // Waiting until having an apoapsis of specified meters.
         while (apoapsisAltitudeStream.Get() < OrbitApoapsisAlt)
             continue;
@@ -157,7 +171,7 @@ class Serpent
 
         // Remove landingFailsafe as we are in orbit
         landingFailsafeEvent.Remove();
-        Console.WriteLine("Exiting suborbital stage");
+        progress.Report("Exiting suborbital stage");
     }
     /// <summary>
     /// Has 1 ActivateNextStage() call.
@@ -165,19 +179,21 @@ class Serpent
     /// </summary>
     public static void DeorbitalStageLoop()
     {
-        Console.WriteLine("Entering deorbital stage");
+        progress.Report("Entering deorbital stage");
 
         vessel.AutoPilot.Engage();
         // TODO: Check if apoapsis or periapsis is bigger, and burn retrograde accordingly
         vessel.AutoPilot.ReferenceFrame = vessel.OrbitalReferenceFrame;
 
+        // TODO: Warp to apoapsis.
         // Waiting until approaching apoapsis, then throttle in retrograde
         while (vessel.Orbit.TimeToApoapsis > 20)
             vessel.AutoPilot.TargetDirection = Retrograde;
 
         // Burn in retrograde until reaching an altitude low enough to land
+        // TODO: Only throttle when looking at retrograde with little error
         vessel.Control.Throttle = 1;
-        while (vessel.Orbit.PeriapsisAltitude > 35000)
+        while (vessel.Orbit.PeriapsisAltitude > 40000)
             vessel.AutoPilot.TargetDirection = Retrograde;
 
         vessel.Control.Throttle = 0;
@@ -185,12 +201,13 @@ class Serpent
         System.Threading.Thread.Sleep(3000); 
 
         vessel.Control.ActivateNextStage();
-        Console.WriteLine("Exiting deorbital stage");
+        progress.Report("Exiting deorbital stage");
+        // TODO: Warp to around 90k meters?
         LandingStageLoop();
     }
     public static void LandingStageLoop()
     {
-        Console.WriteLine("Entering landing stage");
+        progress.Report("Entering landing stage");
         // Check if there is a parachute in current stage, if there isn't, activate next stage
         // TODO: Activate stages until we have parachute?
         bool hasParachuteInStage = false;
@@ -211,15 +228,26 @@ class Serpent
             vessel.AutoPilot.TargetDirection = vessel.Flight(null).Retrograde;
 
         
-        Console.WriteLine("Deploying parachutes.");
+        progress.Report("Deploying parachutes.");
         foreach (Parachute parachute in vessel.Parts.Parachutes)
             parachute.Deploy();
     }
 
     public static void CollectExperimentResults()
     {
-        Console.WriteLine("Collecting experiments");
+        progress.Report("Collecting experiments");
         foreach (Experiment experiment in vessel.Parts.Experiments)
-            experiment.Run();
+        {
+            if (!experiment.HasData)
+            {
+                experiment.Run();
+                string partName = experiment.Part.Name.Replace("."," ").FirstCharToUpper();
+                progress.Report($"Experiment successfully collected from {partName}.");
+                // Wait a little as Data is empty :/
+                System.Threading.Thread.Sleep(200);
+                foreach (ScienceData data in experiment.Data)
+                    progress.Report($"{data.ScienceValue} science collected.");
+            }
+        }
     }
 }
