@@ -8,18 +8,20 @@ namespace KSPScripts
 {
     public partial class SerpentWindow : Window
     {
-        public static Task serpentScriptTask = null;
+        public static Task scriptTask = null;
+        public static IProgress<string> progress;
         public SerpentWindow()
         {
             InitializeComponent();
             // Change console logging to this window's GUI on init.
             Console.SetOut(new App.GUIConsoleWriter(lbResult));
+            progress = new Progress<string>(b => Console.WriteLine(b));
             Console.WriteLine("Initialized Serpent Controller");
         }
         private async void Launch(object sender, RoutedEventArgs e)
         {
             // Only start if it is not running.
-            if (serpentScriptTask != null && serpentScriptTask.Status.Equals(TaskStatus.Running))
+            if (scriptTask != null && scriptTask.Status.Equals(TaskStatus.Running))
             {
                 Console.WriteLine("Script can't be run while another script has already been started.");
                 return;
@@ -42,22 +44,21 @@ namespace KSPScripts
                     return;
                 }
                 Console.WriteLine($"Initializing Serpent with an apoapsis of {apoapsis} m and a periapsis of {periapsis} m.");
-                IProgress<string> progress = new Progress<string>(b => Console.WriteLine(b));
-                serpentScriptTask = Task.Run(()=>Serpent.Start(apoapsis, periapsis, true, lbResult, progress));
-                await serpentScriptTask;
+                scriptTask = Task.Run(()=>Serpent.Start(apoapsis, periapsis, true, lbResult, progress));
+                await scriptTask;
                 Console.WriteLine("Exiting Serpent.");
             }
         }
         private async void Deorbit(object sender, RoutedEventArgs e)
         {
-            if (serpentScriptTask == null) return;
+            if (scriptTask == null) return;
             // Only start if it is not running.
-            if (serpentScriptTask.Status.Equals(TaskStatus.Running))
+            if (scriptTask.Status.Equals(TaskStatus.Running))
             {
                 Console.WriteLine("Script can't be run while another script has already been started.");
                 return;
             }
-            if (!serpentScriptTask.IsCompletedSuccessfully)
+            if (!scriptTask.IsCompletedSuccessfully)
             {
                 Console.WriteLine("Deorbit can be only run after running the launch sequence.");
                 return;
@@ -67,8 +68,8 @@ namespace KSPScripts
             if (messageBoxResult == MessageBoxResult.Yes)
             {
                 Console.WriteLine("Starting Serpent...");
-                serpentScriptTask = Task.Run(()=>Serpent.DeorbitalStageLoop());
-                await serpentScriptTask;
+                scriptTask = Task.Run(()=>Serpent.DeorbitalStageLoop());
+                await scriptTask;
                 Console.WriteLine("Exiting Serpent.");
             }
         }
@@ -80,7 +81,7 @@ namespace KSPScripts
         {
             try
             {
-                Serpent.CollectExperimentResults();
+                Serpent.CollectExperimentResults(progress);
             }
             catch (Exception err)
             {

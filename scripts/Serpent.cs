@@ -42,12 +42,9 @@ class Serpent
             progress.Report("Given orbit altitudes are incorrect, as they are below 70000 meters.");
             return;
         }
-        // Decided that having a proper error msg when can't connect would be better.
-        try 
-        {
-            conn = new Connection(name: "Serpent");
-        }
-        catch
+
+        conn = Utilities.Connect("Serpent");
+        if (conn == null)
         {
             progress.Report("Couldn't connect to the kRPC server. Exiting...");
             return;
@@ -77,20 +74,12 @@ class Serpent
         landingFailsafeEvent.AddCallback(LandingStageLoop);
 
         // Start sequence
-        Countdown(5);
+        Utilities.Countdown(5, progress);
         LaunchStageLoop();
         SuborbitalStageLoop();
         progress.Report("Launch stage concluded.");
     }
 
-    public static void Countdown(int x)
-    {
-        for (int i = x; i > 0; i--)
-        {
-            progress.Report(i.ToString());
-            System.Threading.Thread.Sleep(1000);
-        }
-    }
     /// <summary>
     /// Has 3 ActivateNextStage() calls.
     /// </summary>
@@ -244,21 +233,46 @@ class Serpent
         foreach (Parachute parachute in vessel.Parts.Parachutes)
             parachute.Deploy();
     }
-
-    public static void CollectExperimentResults()
+    public static void CollectExperimentResults(IProgress<string> _progress = null)
     {
-        progress.Report("Collecting experiments");
+        // Use Serpent's progress for logging in case it exists.
+        // Otherwise use the one that is given here.
+        if (progress != null && _progress == null)
+            _progress = progress;
+        // In case Serpent's progress is null and _progress is not given, return with error.
+        else if (_progress == null)
+        {   
+            // TODO: Use logging here some way...
+            return;
+        }
+
+        // Connect in case it is called from another script, or it is
+        // called before Start().
+        if (conn == null)
+        {
+            conn = Utilities.Connect("Experiments");
+            if (conn == null)
+            {
+                // TODO: This way it is not logging?
+                _progress.Report("Couldn't connect to the kRPC server. Exiting...");
+                return;
+            }
+            vessel = conn.SpaceCenter().ActiveVessel;
+        }
+
+        _progress.Report("Collecting experiments");
+
         foreach (Experiment experiment in vessel.Parts.Experiments)
         {
             if (!experiment.HasData)
             {
                 experiment.Run();
                 string partName = experiment.Part.Name.Replace("."," ").FirstCharToUpper();
-                progress.Report($"Experiment successfully collected from {partName}.");
+                _progress.Report($"Experiment successfully collected from {partName}.");
                 // Wait a little as Data is empty :/
                 System.Threading.Thread.Sleep(200);
                 foreach (ScienceData data in experiment.Data)
-                    progress.Report($"{data.ScienceValue} science collected.");
+                    _progress.Report($"{data.ScienceValue} science collected.");
             }
         }
     }
